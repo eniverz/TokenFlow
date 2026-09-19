@@ -1,0 +1,71 @@
+# @package _global_
+
+defaults:
+  - /train: trainer
+  - /model: resVLA
+  - /dataset: libero_only
+  - /train/accelerator: zero2
+  - _self_
+
+task_name: resvla_libero
+pretrained_model_path: /2022533089/projects/ckpt/Qwen3-VL-2B-Instruct
+
+processor:
+  _target_: resVLA.models.resVLA.processing_resvla.ResVLAProcessor.from_transformer_pretrained
+  path: ${pretrained_model_path}
+
+weight_loader:
+  _target_: resVLA.training.weight_loader.MappedWeightLoader
+  path: ${pretrained_model_path}
+  prefix_map:
+    "model.": "vlm."
+  exclude_keys:
+    - lm_head.weight
+
+optimizer:
+  _target_: resVLA.optim.GroupedAdamW
+  lr: 1.0e-4
+  weight_decay: 0.01
+  betas: [0.9, 0.999]
+  eps: 1.0e-8
+  groups: 
+    - name: "vlm.language_model"
+      lr: 1e-5
+      weight_decay: 0.01
+    - name: "vlm.visual"
+      lr: 5e-6
+      weight_decay: 0.01
+    - name: "anchor_dit"
+      lr: 1e-4
+      weight_decay: 0.01
+    - name: "flow"
+      lr: 1e-4
+      weight_decay: 0.01
+
+scheduler:
+  _target_: resVLA.optim.WarmupConstantCosineLR
+  num_training_steps: ${num_train_steps}
+  num_warmup_steps: 5000
+  constant_end_ratio: 0.25
+  lr_min_ratio: 0.1
+  num_cycles: 0.5
+
+train:
+  accelerator:
+    log_with: wandb
+
+wandb:
+  project: resVLA
+  name: ${task_name}_${now:%m%d}
+  group: ${task_name}
+  dir: ${hydra:run.dir}/wandb
+
+pre_device_batch_size: 32
+gradient_accumulation_steps: 1
+num_workers: 16
+num_train_steps: 100000
+log_interval: 100
+save_interval: 10000
+
+action_dim: 32
+action_horizon: 16

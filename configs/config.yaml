@@ -1,0 +1,32 @@
+defaults:
+  - _self_
+  - task: null
+
+hydra:
+  run:
+    dir: ${hydra:runtime.cwd}/results/${task_name}_${now:%m%d}
+  output_subdir: hydra
+  job:
+    chdir: false
+  job_logging:
+    version: 1
+    disable_existing_loggers: false
+    formatters:
+      simple-console:
+        format: "| >> %(message)s"
+        datefmt: "%m/%d [%H:%M:%S]"
+    handlers:
+      rich_console:
+        class: rich.logging.RichHandler
+        level: INFO
+        formatter: simple-console
+        markup: true
+        rich_tracebacks: true
+        show_level: true
+        show_path: true
+        show_time: true
+    root:
+      level: INFO
+      handlers:
+        - rich_console
+

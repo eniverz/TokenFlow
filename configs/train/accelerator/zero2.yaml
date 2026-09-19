@@ -1,0 +1,47 @@
+_target_: accelerate.Accelerator
+# DeepSpeed expects ordinary Python dictionaries, not OmegaConf containers.
+_convert_: all
+
+mixed_precision: bf16
+# Trainer advances the scheduler once per optimizer update.
+step_scheduler_with_optimizer: false
+
+dataloader_config:
+  _target_: accelerate.DataLoaderConfiguration
+  # DataLoader.batch_size is the micro batch size on each GPU.
+  split_batches: false
+  dispatch_batches: false
+  use_seedable_sampler: true
+  data_seed: 42
+
+gradient_accumulation_plugin:
+  _target_: accelerate.utils.GradientAccumulationPlugin
+  num_steps: ${gradient_accumulation_steps}
+  # ZeRO-2 partitions gradients and must not enter DDP-style no_sync.
+  sync_each_batch: true
+
+deepspeed_plugin:
+  _target_: accelerate.DeepSpeedPlugin
+  zero_stage: 2
+  zero3_init_flag: false
+  gradient_accumulation_steps: ${gradient_accumulation_steps}
+  gradient_clipping: 1.0
+  hf_ds_config:
+    # Accelerate resolves these flags from mixed_precision.
+    fp16:
+      enabled: auto
+    bf16:
+      enabled: auto
+    train_micro_batch_size_per_gpu: ${pre_device_batch_size}
+    # Resolved during prepare: micro batch * world size * accumulation steps.
+    train_batch_size: auto
+    gradient_accumulation_steps: ${gradient_accumulation_steps}
+    gradient_clipping: 1.0
+    zero_optimization:
+      stage: 2
+      allgather_partitions: true
+      allgather_bucket_size: 500000000
+      reduce_scatter: true
+      reduce_bucket_size: 500000000
+      overlap_comm: true
+      contiguous_gradients: true

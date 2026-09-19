@@ -1,0 +1,29 @@
+defaults:
+  - vlm_config: qwen3_vl_2b
+  - _self_
+
+_target_: resVLA.models.resVLA.configuration_resvla.ResVLAConfig
+_convert_: all
+
+model_type: resvla
+dtype: bfloat16
+attn_implementation: flash_attention_2
+
+noise_beta_alpha: 1.5
+noise_beta_beta: 1.0
+noise_s: 0.999
+
+dit_q_heads: 16
+dit_kv_heads: 16
+dit_dropout: 0.0
+num_anchor_layers: 19
+
+num_refiner_layers: 9
+num_repeat_diffusion_steps: 2
+num_inference_steps: 4
+fm_noise_std: 1
+inference_fm_noise_std: 0.5
+
+action_horizon: 16
+action_dim: 32
+embodiment_config: ${oc.collate:${dataset}}

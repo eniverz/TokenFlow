@@ -1,0 +1,17 @@
+accelerate
+transformers==5.17.0
+torch==2.6.0
+safetensors
+numpy==1.26.4
+pandas
+pyarrow
+torchvision==0.21.0
+datasets
+jsonlines
+av
+torchcodec==0.16.0
+hydra-core
+wandb
+eniops
+websockets
+msgpack

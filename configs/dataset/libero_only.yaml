@@ -1,0 +1,7 @@
+_target_: resVLA.data.mixture_dataset.MixtureDataset
+
+weights:
+- 1.0
+
+datasets:
+- ${oc.create:${oc.load:configs/dataset/transform_datasets/libero.yaml}}

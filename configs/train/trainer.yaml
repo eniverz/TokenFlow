@@ -1,0 +1,28 @@
+_target_: resVLA.training.trainer.Trainer
+
+dataloader:
+  _target_: torch.utils.data.DataLoader
+  dataset: ${dataset}
+  batch_size: ${pre_device_batch_size}
+  num_workers: ${num_workers}
+  shuffle: true
+  drop_last: true
+  pin_memory: true
+  persistent_workers: true
+  prefetch_factor: 2
+  collate_fn:
+    _target_: resVLA.data.batch_collator.BatchCollator
+    processor: ${processor}
+    tokenize: true
+    add_generation_prompt: true
+    return_dict: true
+    return_tensors: pt
+
+accelerator: ${accelerator}
+
+wandb_cfg: ${wandb}
+
+output_dir: ${hydra:run.dir}
+num_train_steps: ${num_train_steps}
+log_interval: ${log_interval}
+save_interval: ${save_interval}
