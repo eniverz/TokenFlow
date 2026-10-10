@@ -19,6 +19,7 @@ gradient_accumulation_plugin:
   num_steps: ${gradient_accumulation_steps}
   # ZeRO-2 partitions gradients and must not enter DDP-style no_sync.
   sync_each_batch: true
+  sync_with_dataloader: false
 
 deepspeed_plugin:
   _target_: accelerate.DeepSpeedPlugin

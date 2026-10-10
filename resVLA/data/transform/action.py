@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Literal, Sequence, Optional
+from typing import Dict, Literal, Sequence
 
 import torch
 import torch.nn.functional as F
@@ -47,6 +47,55 @@ class PadStateAction(BaseTransform):
             value=False,
         )
         return ret, mask
+
+
+class PadActionToDict(BaseTransform):
+    def __init__(
+        self,
+        dim_config: Dict[str, Sequence[int]],
+        pad_value: int = 0,
+        max_part_dim: int = 6
+    ):
+        super().__init__()
+        self.dim_config = dim_config
+        self.pad_value = pad_value
+        self.max_part_dim = max_part_dim
+
+    def __call__(self, data):
+        if "actions" not in data or data["actions"] is None:
+            return data
+
+        actions = data["actions"]
+        action_dict = {}
+        action_mask = {}
+        # FIXME: use full set of parts.
+        for key, dims in self.dim_config.items():
+            vals, mask = self.pad(actions[..., dims])
+            action_dict[key] = vals
+            action_mask[key] = mask
+
+        data["actions_dict"] = action_dict
+        data["actions_mask"] = action_mask
+        return data
+
+    def pad(self, value):
+        dim = value.shape[-1]
+        if dim > self.max_part_dim:
+            raise ValueError(
+                f"Value dimension {dim} is greater than the specified max_part_dim "
+                f"{self.max_part_dim}."
+            )
+
+        pad_width = self.max_part_dim - dim
+        ret = F.pad(value, (0, pad_width), mode="constant", value=self.pad_value)
+        mask = F.pad(
+            torch.ones(dim, dtype=torch.bool, device=value.device),
+            (0, pad_width),
+            mode="constant",
+            value=False,
+        )
+        return ret, mask
+
 
 # MARK: Normalizer
 

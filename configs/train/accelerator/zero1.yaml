@@ -18,6 +18,7 @@ gradient_accumulation_plugin:
   _target_: accelerate.utils.GradientAccumulationPlugin
   num_steps: ${gradient_accumulation_steps}
   sync_each_batch: false
+  sync_with_dataloader: false
 
 deepspeed_plugin:
   _target_: accelerate.DeepSpeedPlugin

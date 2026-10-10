@@ -3,12 +3,18 @@
 defaults:
   - /train: trainer
   - /model: resVLA
-  - /dataset: libero_only
   - /train/accelerator: zero2
   - _self_
 
 task_name: resvla_libero
 pretrained_model_path: /2022533089/projects/ckpt/Qwen3-VL-2B-Instruct
+
+dataset:
+  _target_: resVLA.data.mixture_dataset.MixtureDataset
+  weights:
+    - 1.0
+  datasets:
+    - ${oc.create:${oc.load:configs/dataset/libero.yaml}}
 
 processor:
   _target_: resVLA.models.resVLA.processing_resvla.ResVLAProcessor.from_transformer_pretrained

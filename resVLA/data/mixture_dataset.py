@@ -65,6 +65,8 @@ class MixtureDataset(Dataset):
         self.actual_total_length = sum(self.actual_lengths)
         self.total_length = int(self.effective_ends[-1])
 
+        logger.info(f"Initialized MixtureDataset with {len(self.datasets)} datasets, total length: {self.total_length}, weights: {self.weights}")
+
     def _compute_effective_lengths(self) -> List[int]:
         effective_lengths = []
         for dataset_idx, (actual_length, weight) in enumerate(
@@ -92,6 +94,7 @@ class MixtureDataset(Dataset):
 
     def set_epoch(self, epoch: int) -> None:
         """Set the epoch used by deterministic weighted undersampling."""
+        logger.info(f"Built dataset mapping for Epoch {epoch}")
         self.sampling_epoch = int(epoch)
 
     def _map_weighted_local_index(self, dataset_idx: int, local_idx: int) -> int:

@@ -1,0 +1,38 @@
+_target_: resVLA.models.tokenizer.vq_actioncodec.configuration_vq_codec.ActionCodecConfig
+_convert_: all
+
+model_type: vq_actioncodec
+dtype: float32
+embodiment_config: [franka]
+part_config: [left_arm, right_arm, left_gripper, right_gripper, torso]
+
+action_horizon: ${action_horizon}
+max_part_dim: 6
+dct_norm_type: ortho
+
+hidden_size: 512
+cross_attention_dim: 32
+num_heads: 4
+num_kv_heads: 4
+num_layers: 3
+norm_eps: 1.0e-6
+attn_dropout: 0.0
+attention_bias: false
+use_layer_scale: true
+attn_implementation: sdpa
+
+num_tokens: 16
+num_quantizers: 4
+codebook_size: 2048
+codebook_dim: 512
+quantizer_dropout: 0.2
+threshold_ema_dead: 2.0
+ema_decay: 0.99
+ema_eps: 1.0e-5
+ema_update_interval: ${gradient_accumulation_steps}
+
+commit_loss_weight: 0.25
+consistency_loss_weight: 0.1
+consistency_delta_max: 1
+quantized_recons_loss_weight: 1.5
+continuous_recons_loss_weight: 1.0
