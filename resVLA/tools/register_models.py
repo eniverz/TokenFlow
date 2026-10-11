@@ -5,6 +5,8 @@ from ..models.tokenizer.vq_actioncodec.configuration_vq_codec import ActionCodec
 from ..models.tokenizer.vq_actioncodec.modeling_vq_codec import ActionCodec
 from ..models.tokenizer.vq_actioncodec_v2.configuration_vq_codec import ActionCodecConfig as ActionCodecV2Config
 from ..models.tokenizer.vq_actioncodec_v2.modeling_vq_codec import ActionCodec as ActionCodecV2
+from ..models.tokenizer.vq_actioncodec_v3.configuration_vq_codec import ActionCodecConfig as ActionCodecV3Config
+from ..models.tokenizer.vq_actioncodec_v3.modeling_vq_codec import ActionCodec as ActionCodecV3
 
 
 def register_resvla():
@@ -24,3 +26,5 @@ def register_all_models():
     AutoModel.register(ActionCodecConfig, ActionCodec)
     AutoConfig.register("vq_actioncodec_v2", ActionCodecV2Config)
     AutoModel.register(ActionCodecV2Config, ActionCodecV2)
+    AutoConfig.register("vq_actioncodec_v3", ActionCodecV3Config)
+    AutoModel.register(ActionCodecV3Config, ActionCodecV3)

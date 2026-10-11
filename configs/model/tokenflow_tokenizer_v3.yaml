@@ -1,0 +1,48 @@
+_target_: resVLA.models.tokenizer.vq_actioncodec_v3.configuration_vq_codec.ActionCodecConfig
+_convert_: all
+
+model_type: vq_actioncodec_v3
+dtype: float32
+embodiment_config: ${oc.collate:${dataset}}
+part_config: [left_arm, right_arm, left_gripper, right_gripper, torso]
+
+action_horizon: ${action_horizon}
+max_part_dim: 6
+dct_norm_type: ortho
+
+hidden_size: 256
+cross_attention_dim: 32
+num_heads: 4
+num_kv_heads: 4
+num_layers: 3
+norm_eps: 1.0e-6
+attn_dropout: 0.0
+attention_bias: false
+use_layer_scale: true
+attn_implementation: sdpa
+
+num_tokens: 16
+num_quantizers: 4
+codebook_size: 4096
+codebook_dim: 16
+quantizer_dropout: 0.15
+threshold_ema_dead: 2.0
+
+commit_loss_weight: 0.25
+consistency_loss_weight: 0.1
+consistency_start_step: ${oc.mul:${num_train_steps},0.2}
+consistency_end_step: ${oc.mul:${num_train_steps},0.8}
+consistency_delta_max_start: 1
+consistency_delta_max_end: 3
+consistency_eps_begin: 0.02
+consistency_eps_end: 0.1
+consistency_layer_weights_end: [0.9, 0.6, 0.3, 0.1]
+quantized_recons_loss_weight: 1.5
+continuous_recons_loss_weight: 1.0
+ema_decay: 0.99
+ema_eps: 1.0e-5
+ema_update_interval: ${gradient_accumulation_steps}
+
+rule_based_key_patterns: [gripper]
+rule_based_min_block_len: 1
+rule_based_binarize_threshold: 0.5

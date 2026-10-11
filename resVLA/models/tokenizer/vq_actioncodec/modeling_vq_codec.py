@@ -52,8 +52,12 @@ class ActionCodec(PreTrainedModel):
         elif isinstance(module, ConditionalFiLM):
             nn.init.zeros_(module.linear.weight)
             nn.init.zeros_(module.linear.bias)
+        elif isinstance(module, LayerDCT):
+            mat = module.compute_matrix()
+            module.mat.copy_(mat)
         elif isinstance(module, SinusoidalPositionalEmbedding):
-            module._init_pos_emb()
+            pos_emb = module._init_pos_emb()
+            module.pos_emb.copy_(pos_emb)
         elif isinstance(module, EMAVectorQuantize):
             nn.init.xavier_uniform_(module.in_proj.weight)
             nn.init.zeros_(module.out_proj.weight)
