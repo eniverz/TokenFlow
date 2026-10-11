@@ -53,3 +53,4 @@ def _oc_collate(config: Any) -> list[str]:
 def register_all_config_hooks():
     _register("oc.load", _oc_load)
     _register("oc.collate", _oc_collate)
+    _register("oc.mul", lambda x, y: x * y)

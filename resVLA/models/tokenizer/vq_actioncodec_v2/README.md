@@ -1,0 +1,2 @@
+- 修改consistency loss, 让consistency loss的影响随step增加而变大: 前 20% 不会出现consistency的影响, 到80%step影响达到最大
+- 添加了一些metrics

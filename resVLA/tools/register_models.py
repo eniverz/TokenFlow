@@ -3,6 +3,8 @@ from transformers import AutoModel, AutoConfig, AutoProcessor
 from ..models.resVLA import ResVLA, ResVLAConfig, ResVLAProcessor
 from ..models.tokenizer.vq_actioncodec.configuration_vq_codec import ActionCodecConfig
 from ..models.tokenizer.vq_actioncodec.modeling_vq_codec import ActionCodec
+from ..models.tokenizer.vq_actioncodec_v2.configuration_vq_codec import ActionCodecConfig as ActionCodecV2Config
+from ..models.tokenizer.vq_actioncodec_v2.modeling_vq_codec import ActionCodec as ActionCodecV2
 
 
 def register_resvla():
@@ -20,3 +22,5 @@ def register_all_models():
     register_resvla()
     AutoConfig.register("vq_actioncodec", ActionCodecConfig)
     AutoModel.register(ActionCodecConfig, ActionCodec)
+    AutoConfig.register("vq_actioncodec_v2", ActionCodecV2Config)
+    AutoModel.register(ActionCodecV2Config, ActionCodecV2)
