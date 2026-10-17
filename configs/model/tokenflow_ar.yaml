@@ -1,0 +1,9 @@
+_target_: resVLA.models.tokenflow_stage2.v1.configuration_tokenflow_ar.TokenFlowARConfig.from_backbones
+_convert_: all
+
+vlm_path: ${pretrained_model_path}
+action_tokenizer_path: ${action_tokenizer_path}
+dtype: bfloat16
+attn_implementation: flash_attention_2
+action_dim: ${action_dim}
+part_dims: ${part_dims}

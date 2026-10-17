@@ -13,6 +13,7 @@ from typing import Any, Mapping
 
 import numpy as np
 import torch
+from accelerate.utils import send_to_device
 from hydra.utils import instantiate, to_absolute_path
 from omegaconf import DictConfig, ListConfig, OmegaConf
 from transformers import AutoModel, AutoProcessor
@@ -126,7 +127,16 @@ class CheckpointPolicy:
         self.inverse_plans_by_embodiment: dict[str, list[dict[str, Any]]] = {}
         self.metadata_by_embodiment: dict[str, dict[str, Any]] = {}
         self.action_dim = int(self.model.config.action_dim)
-        self.action_horizon = int(self.model.config.action_horizon)
+        action_horizon = getattr(self.model.config, "action_horizon", None)
+        if action_horizon is None:
+            codec_config = getattr(getattr(self.model, "action_tokenizer", None), "config", None)
+            action_horizon = getattr(codec_config, "action_horizon", None)
+        if action_horizon is None:
+            raise ValueError("Neither model nor action tokenizer config defines action_horizon.")
+        self.action_horizon = int(action_horizon)
+        configured_embodiments = getattr(self.model.config, "embodiment_config", None)
+        if configured_embodiments is None:
+            configured_embodiments = getattr(self.model.config, "part_dims", {})
         task_cfg = _plain(cfg)
         if not isinstance(task_cfg, Mapping):
             raise TypeError("Resolved Hydra cfg must be a mapping.")
@@ -142,8 +152,11 @@ class CheckpointPolicy:
                 "Top-level action_horizon does not match the checkpoint model: "
                 f"cfg={task_cfg['action_horizon']}, model={self.action_horizon}."
             )
+        collator_cfg = copy.deepcopy(task_cfg["train"]["dataloader"]["collate_fn"])
+        # Reuse training collation settings with the checkpoint's processor.
+        collator_cfg.pop("processor", None)
+        self.collator = instantiate(collator_cfg, processor=self.processor)
         self._build_transform_registry(task_cfg)
-        configured_embodiments = list(getattr(self.model.config, "embodiment_config", []))
         configured = set(configured_embodiments)
         missing = set(self.metadata_by_embodiment) - configured
         if missing:
@@ -308,15 +321,10 @@ class CheckpointPolicy:
 
         transformed = self._apply_input_transforms(data, embodiment_name)
         state_for_inverse = transformed["states"].clone()
-        processor_input = self._encode_processor_input(
-            transformed["images"], transformed["prompt"]
-        )
-        batch = {
-            "vlm_inputs": processor_input.to(self.device),
-            "states": transformed["states"].unsqueeze(0),
-            "embodiment": [embodiment_name],
-        }
-        batch["states"] = batch["states"].to(self.device)
+        # RepackTransform represents absent inference fields (e.g. actions) as
+        # None, which default_collate cannot batch. Keep every available field.
+        sample = {key: value for key, value in transformed.items() if value is not None}
+        batch = send_to_device(self.collator([sample]), self.device)
 
         autocast_enabled = self.dtype is not None
         with torch.inference_mode(), torch.autocast(
@@ -344,26 +352,6 @@ class CheckpointPolicy:
                 f"execution_horizon must be in [1, {actions.shape[0]}], got {requested_horizon}."
             )
         return {"actions": actions[:requested_horizon].numpy()}
-
-    def _encode_processor_input(self, images: dict, prompt: str) -> Any:
-        if hasattr(self.processor, "encode_input"):
-            return self.processor.encode_input(
-                images=images,
-                instruction=prompt,
-                tokenize=True,
-                add_generation_prompt=False,
-                return_dict=True,
-                return_tensors="pt",
-            )
-        content = [{"type": "image", "image": image} for image in images.values()]
-        content.append({"type": "text", "text": prompt})
-        return self.processor.apply_chat_template(
-            [{"role": "user", "content": content}],
-            tokenize=True,
-            add_generation_prompt=False,
-            return_dict=True,
-            return_tensors="pt",
-        )
 
     def _apply_input_transforms(self, data: dict, embodiment_name: str) -> dict:
         transformed = copy.deepcopy(data)

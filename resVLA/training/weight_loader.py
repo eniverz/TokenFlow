@@ -33,6 +33,7 @@ class BaseWeightLoader:
     def load(self, model: torch.nn.Module) -> torch.nn.Module:
         raise NotImplementedError
 
+
 class MappedWeightLoader(BaseWeightLoader):
     """Load a safetensors checkpoint into a model using explicit prefix mapping.
 
@@ -106,4 +107,15 @@ class CompositeWeightLoader(BaseWeightLoader):
     def load(self, model: torch.nn.Module) -> torch.nn.Module:
         for loader in self.loaders:
             model = loader.load(model)
+        return model
+
+
+class VocabResize(BaseWeightLoader):
+    """Resize a backbone to the vocabulary size stored in the parent config."""
+
+    def __init__(self, module: str) -> None:
+        self.module = module
+
+    def load(self, model: torch.nn.Module) -> torch.nn.Module:
+        model.get_submodule(self.module).resize_token_embeddings(model.config.vocab_size)
         return model

@@ -57,6 +57,7 @@ def main(cfg: DictConfig):
 def _run():
     sys.argv.extend([
         "hydra.output_subdir=null",
+        "hydra/job_logging=disabled",
     ])
     main()
 
