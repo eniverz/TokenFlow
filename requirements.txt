@@ -1,17 +1,23 @@
 accelerate
+deepspeed
 transformers==5.17.0
-torch==2.6.0
+torch==2.8.0
 safetensors
-numpy==1.26.4
+numpy==2.2.6
 pandas
-pyarrow
-torchvision==0.21.0
-datasets
+pyarrow==26.0.0
+torchvision==0.23.0
+datasets==3.6.0
 jsonlines
-av
-torchcodec==0.16.0
+av==18.1.0
+torchcodec==0.6.0
 hydra-core
 wandb
-eniops
+einops
 websockets
 msgpack
+flash-linear-attention[cuda]==0.5.2
+flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp311-cp311-linux_x86_64.whl
+causal-conv1d @ https://github.com/Dao-AILab/causal-conv1d/releases/download/v1.7.0/causal_conv1d-1.7.0+cu12torch2.8cxx11abiTRUE-cp311-cp311-linux_x86_64.whl
+tilelang
+
