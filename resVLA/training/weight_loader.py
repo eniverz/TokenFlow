@@ -51,7 +51,7 @@ class MappedWeightLoader(BaseWeightLoader):
     ) -> None:
         self.path = path
         self.prefix_map = dict(prefix_map)
-        self.exclude_keys = frozenset(exclude_keys)
+        self.exclude_keys = tuple(exclude_keys)
 
     def _map_key(self, source_key: str) -> str:
         for source_prefix, target_prefix in self.prefix_map.items():
@@ -75,7 +75,7 @@ class MappedWeightLoader(BaseWeightLoader):
                     raise KeyError(f"Duplicate safetensors key: {source_key}")
                 source_keys.add(source_key)
 
-                if source_key in self.exclude_keys:
+                if source_key.startswith(self.exclude_keys):
                     del tensor
                     continue
 

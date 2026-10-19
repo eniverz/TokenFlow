@@ -7,7 +7,7 @@ repo_ids:
 lerobot_version: v2.1
 action_horizon: ${action_horizon}
 action_only: false
-video_backend: pyav
+video_backend: torchcodec
 transform:
   - _target_: resVLA.data.transform.process.RepackTransform
     repack:

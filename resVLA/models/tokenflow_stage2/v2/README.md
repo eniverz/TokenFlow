@@ -320,14 +320,6 @@ $$
 
 当前没有动作重建 MSE、codec 训练 loss 或 `loss/total_loss` 等额外返回项。`action_token` 的分母没有保护项，输入应至少包含一个有效动作码目标。
 
-可以用以下命令验证 loss、正确率与 hidden/weight 梯度，包括低精度、autocast、非连续输入、大词表、跨 tile 并列最大值和上游 loss 缩放：
-
-```bash
-python -m unittest discover -s tests -p test_tokenflow_fused_linear_ce.py -v
-```
-
-CUDA 测试需要可用 GPU 和 Triton；缺少 PyTorch 或可用 GPU 时会跳过，CUDA 环境直接要求安装 Triton。跳过不代表内核已验证。实际速度和显存收益需要在目标 GPU 上测量，首次调用包含 JIT 编译耗时。
-
 ## Predict Action：自回归生成并解码动作
 
 ### 数据流程图

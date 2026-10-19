@@ -1,0 +1,93 @@
+# @package _global_
+
+defaults:
+  - /train: trainer
+  - /model: tokenflow_ar_v2
+  - /train/accelerator: zero2
+  - _self_
+
+task_name: tokenflow_stage2_v2
+pretrained_model_path: /2022533089/projects/ckpt/Qwen3.5-2B-base
+action_tokenizer_path: /2022533089/projects/resVLA/results/tokenflow_stage1_v3_1012/checkpoint/step_100000
+action_horizon: 16
+action_dim: 32
+part_dims:
+  franka:
+    left_arm: []
+    right_arm: [0, 1, 2, 3, 4, 5]
+    left_gripper: []
+    right_gripper: [6]
+    torso: []
+
+dataset_root: /2022533089/datasets/StarVLA_datasets/libero
+norm_stats_dir: norm_stats/tokenflow/libero
+dataset:
+  _target_: resVLA.data.mixture_dataset.MixtureDataset
+  weights: [1.0]
+  datasets:
+    - ${oc.create:${oc.load:configs/dataset/libero_tokenflow_ar.yaml}}
+
+processor:
+  _target_: resVLA.models.tokenflow_stage2.v2.processing_tokenflow_ar.TokenFlowARProcessor.from_transformer_pretrained
+  path: ${pretrained_model_path}
+  config: ${model}
+
+weight_loader:
+  _target_: resVLA.training.weight_loader.CompositeWeightLoader
+  loaders:
+    - _target_: resVLA.training.weight_loader.MappedWeightLoader
+      path: ${pretrained_model_path}
+      prefix_map:
+        "": "vlm."
+      exclude_keys:
+        - "mtp."
+    - _target_: resVLA.training.weight_loader.MappedWeightLoader
+      path: ${action_tokenizer_path}
+      prefix_map:
+        "": "action_tokenizer.model."
+    - _target_: resVLA.training.weight_loader.VocabResize
+      module: "vlm"
+
+optimizer:
+  _target_: resVLA.optim.GroupedAdamW
+  lr: 1.0e-4
+  weight_decay: 0.01
+  betas: [0.9, 0.999]
+  eps: 1.0e-8
+  groups:
+    - name: vlm.model.language_model
+      lr: 1.0e-5
+    - name: vlm.model.visual
+      lr: 5.0e-6
+
+scheduler:
+  _target_: resVLA.optim.WarmupConstantCosineLR
+  num_training_steps: ${num_train_steps}
+  num_warmup_steps: 5000
+  constant_end_ratio: 0.25
+  lr_min_ratio: 0.1
+  num_cycles: 0.5
+
+train:
+  accelerator:
+    # Use autocast without converting the frozen codec's weights/codebooks to bf16.
+    mixed_precision: "no"
+    log_with: wandb
+    deepspeed_plugin:
+      hf_ds_config:
+        torch_autocast:
+          enabled: true
+          dtype: bfloat16
+
+pre_device_batch_size: 48
+gradient_accumulation_steps: 1
+num_workers: 16
+num_train_steps: 100000
+log_interval: 100
+save_interval: 10000
+
+wandb:
+  project: resVLA
+  name: ${task_name}_${now:%m%d}
+  group: ${task_name}
+  dir: ${hydra:run.dir}/wandb

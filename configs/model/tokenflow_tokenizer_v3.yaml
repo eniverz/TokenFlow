@@ -3,7 +3,7 @@ _convert_: all
 
 model_type: vq_actioncodec_v3
 dtype: float32
-embodiment_config: ${oc.collate:${dataset}}
+embodiment_config: ${oc.create:${oc.collate:${dataset}}}
 part_config: [left_arm, right_arm, left_gripper, right_gripper, torso]
 
 action_horizon: ${action_horizon}
