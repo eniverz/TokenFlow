@@ -1,193 +1,102 @@
-# 数据管线
+# DataLoader
 
-数据管线由三部分组成：
+当前数据入口支持 LeRobot Dataset v2.1 和 v3.0，需要在 YAML 中明确指定 `lerobot_version: v2.1` 或 `lerobot_version: v3.0`。实际分支判断使用这两个完整字符串。
 
-1. LeRobot reader 负责从本地或远程 repo 读取帧、状态、动作和任务文本；
-2. TransformDataset 按配置顺序执行样本级 transform；
-3. BatchCollator 在 DataLoader 中把图像和文本交给 ResVLAProcessor，并把数值字段拼成 batch。
+## Dataset
 
-当前 LIBERO 任务的入口是 [configs/dataset/transform_datasets/libero.yaml](../configs/dataset/transform_datasets/libero.yaml)，外层再由 [MixtureDataset](../resVLA/data/mixture_dataset.py) 组合。
+数据集按以下层级组织：
 
-## 数据集装配
+1. YAML 中的 `repo_ids` 指定一个或多个 LeRobot 数据集，`lerobot_version` 决定使用 [LeRobot v2.1](/resVLA/data/lerobot/lerobot_dataset.py) 或 [LeRobot v3.0](/resVLA/data/lerobot/lerobot_dataset_v3.py)。同一个 `TransformDataset` 中的 `repo_ids` 共用版本和 transform 配置。
+2. 配置中的 `transform` 列表构成顺序变换链，在每次读取单条 sample 后依次执行。
+3. 多个 LeRobot 子数据集与同一条变换链组成一个 [TransformDataset](/resVLA/data/transform_dataset.py)，其长度是所有子集长度之和。
+4. 多个 `TransformDataset` 及对应的权重组成一个 [MixtureDataset](/resVLA/data/mixture_dataset.py)。每个 `TransformDataset` 是一个采样组；权重作用于整组，不分别作用于组内的每个 LeRobot 子集。
+5. DataLoader 的 sampler 决定访问哪些 mixture 全局索引及其顺序，`collate_fn` 将取出的多条 sample 合成 batch。
 
 ### TransformDataset
 
-[TransformDataset](../resVLA/data/transform_dataset.py) 接收一个或多个 LeRobot repo id。每个 repo 根据 lerobot_version 选择：
+实现见 [transform_dataset.py](/resVLA/data/transform_dataset.py)。
 
-- v2.1：resVLA.data.lerobot.lerobot_dataset；
-- v3.0：resVLA.data.lerobot.lerobot_dataset_v3。
+初始化时创建各个 LeRobot 子集，记录 `all_lengths` 及总长度 `length`，形成逻辑上的连续索引空间。这里没有把所有 sample 预先读取并展平成内存列表。
 
-构造 LeRobotDataset 时，代码会：
+创建 LeRobot 子集时，还会根据其 metadata 中的 `fps` 设置：
 
-- 根据 metadata 的 fps 创建 action 的 delta_timestamps；
-- 请求从当前帧开始的 action_horizon 个动作；
-- 在 action_only=false 时读取图像和视频帧；
-- 对每个读取失败的样本顺序尝试同一数据集中的下一个样本，直到找到可用样本或全部失败。
+```python
+delta_timestamps = {
+    "action": [t / fps for t in range(action_horizon)]
+}
+```
 
-因此 action_horizon=16 时，一个样本的动作通常是 [16, action_dim_raw]，state 是当前时刻的一步状态，图像由 LeRobot reader 转换为 tensor 或 PIL 兼容对象。
+这样每次取样可得到从当前时刻开始的 `action_horizon` 步动作。`action_only=True` 时设置 `load_images=False`；该选项控制图像加载，并不表示 sample 必然只含动作字段。`action_horizon` 虽被注解为 float，实际用于 `range`，应配置为正整数。
+
+数据采样流程：
+
+1. `__getitem__(index)` 从第一个子集开始，逐次减去子集长度，定位对应子集与局部索引。例如子集长度为 `[100,300]`，组内索引 120 对应第二个子集的索引 20。
+2. 调用该 LeRobot 子集的 `__getitem__`，读取一条 sample。
+3. 将 sample 依次传给配置中的 transform，并返回最后的结果。
+4. 如果读取或任何一个 transform 抛出异常，则在**同一个 LeRobot 子集**内尝试下一个索引，到末尾后取模绕回；最多尝试该子集长度次。全部失败后抛出 `RuntimeError`，不会自动切换到其他子集。
+
+因此发生读取失败时，实际返回的 sample 可能不是最初索引指定的那条。Mixture 的采样数量和去重性质描述的是请求索引，不能保证异常回退后的实际样本仍无重复。
 
 ### MixtureDataset
 
-[MixtureDataset](../resVLA/data/mixture_dataset.py) 将多个 TransformDataset 组成一个 PyTorch Dataset：
+实现见 [mixture_dataset.py](/resVLA/data/mixture_dataset.py)。该类先用权重为每组建立逻辑长度，再将全局索引确定性地映射到某组的真实索引；它不在每次 `__getitem__` 时随机抽取一个数据集，也不预先生成完整的采样顺序列表。
 
-- weights 缺省时每组为 1.0；
-- 权重会归一化，使逻辑总长度约等于各数据集真实长度之和；
-- 权重小于 1 的数据集使用确定性的跨源步长映射进行 undersampling；
-- 每轮 DataLoader 重新开始时，Trainer 调用 set_epoch，改变 undersampling 的偏移；
-- 当前 LIBERO 配置只有一个 TransformDataset，weights=[1.0]，所以不会改变采样分布。
+数据采样流程：
 
-这不是带随机数的 WeightedRandomSampler；它通过逻辑索引映射控制每个数据集在一个 epoch 中出现多少次。
+1. 根据各组真实长度与输入权重，计算归一化权重、逻辑长度及逻辑索引区间。
+2. 根据传入的 mixture 全局索引，定位采样组及组内逻辑索引。
+3. 将组内逻辑索引映射为该 `TransformDataset` 的真实索引：过采样时循环重复，欠采样时使用互质步长与 epoch 偏移。
+4. 调用 `self.datasets[dataset_idx][local_idx]`，由 `TransformDataset` 完成真实样本读取与变换，再原样返回 sample。
 
-## 样本 transform 顺序
+采样数据计算流程
 
-LIBERO 的 transform 顺序非常重要，当前配置是：
+1. **计算每组的采样次数。** 将各组的“真实长度 × 权重”按比例缩放，使总量接近原始总长度，再取整且每组至少保留 1 次，得到逻辑长度 `effective_lengths`。因此采样占比由长度和权重共同决定，相同权重不代表各组等概率。
+2. **划分索引区间。** 按逻辑长度依次排列各组，形成连续的全局索引空间。传入 `index` 后，先找到所属组，再得到组内索引。
+3. **映射到真实样本。** 逻辑长度大于或等于真实长度时，通过取模循环取样；逻辑长度较小时，用与真实长度互质的步长选取不重复的索引，并根据 `set_epoch` 设置的 epoch 调整偏移。
+4. **读取并返回。** 用映射后的真实索引调用对应的 `TransformDataset`，读取 sample、执行变换并返回。
 
-~~~text
-原始 LeRobot 字段
-  ↓
-RepackTransform
-  ↓
-InjectDefaultPrompt
-  ↓
-CoTPrompt
-  ↓
-InjectEmbodiment("franka")
-  ↓
-InjectActionTimestamp(action_horizon=16, action_freq=20)
-  ↓
-Normalizer(norm_type="quantile")
-  ↓
-PadStateAction(action_dim=32)
-  ↓
-ResizeImage(size=(224, 224))
-~~~
+例如，两组长度为 `[100,300]`、权重为 `[3,1]`，最终逻辑长度为 `[200,200]`：第一组的 100 条数据各取两次，第二组从 300 条中选取 200 条。权重默认全部为 1，显式设置时必须大于 0；取整可能使最终总长度略有变化。
 
-### 1. RepackTransform
+#### 与 DataLoader 的分工
 
-将 LeRobot 字段重新组织成模型侧的统一 schema：
+Mixture 自身按组构造连续逻辑区间。若外部按 `0,1,2,…` 访问，会先取完第一组再取第二组；shuffle 发生在 DataLoader/sampler 层，而非 mixture 内部。当前 [trainer.yaml](/configs/train/trainer.yaml) 设置了 `shuffle: true` 和 `drop_last: true`。
 
-~~~yaml
-actions: action
-states: observation.state
-images:
-  cam_high: observation.images.image
-  cam_wrist: observation.images.wrist_image
-prompt: task
-~~~
+[Trainer](/resVLA/training/trainer.py) 在迭代耗尽后调用 `dataset.set_epoch(self.epoch)` 再创建迭代器。需要区分“主进程调用了 set_epoch”和“执行取样的对象已收到新 epoch”：`MixtureDataset` 使用普通整数保存 epoch，没有共享状态或 worker 同步机制；当前配置还开启了 `persistent_workers: true`，因此不能仅凭这个调用就认为持久 worker 中的欠采样偏移已经更新。这里记录的是代码的接口行为，实际跨进程传播需要单独保证。
 
-transform 会先展开嵌套 key，再按映射读取，因此源数据必须包含这些字段，或者后续 transform 必须能够补全缺失字段。
+## Transform
 
-### 2. Prompt
+transform 按 YAML 列表顺序执行，后一个 transform 接收前一个 transform 返回的数据。常用项包括：
 
-InjectDefaultPrompt 只在样本没有 prompt 时写入 Do task.。LIBERO 样本通常已经有 task 文本，因此默认值一般不会生效。
+下表描述单条 sample 的输出，不含 batch 维；`H` 为动作步数，`A` 为补齐后的 `action_dim`，`M` 为 `max_part_dim`。各变换均返回数据字典，输出列列出其中新增或修改的字段。
 
-CoTPrompt 将现有 prompt 包装成：
+| 实现 | 作用 | 输出结果 |
+| --- | --- | --- |
+| [RepackTransform](/resVLA/data/transform/process.py) | 按映射组织字段；映射的 key 为输出字段，value 为源字段，缺失源字段会得到 `None` | 仅包含映射目标字段的新字典，例如 `{"actions": ..., "states": ..., "images": {...}, "prompt": ...}`；字段值的类型和 shape 不变 |
+| [InjectDefaultPrompt / CoTPrompt](/resVLA/data/transform/prompt.py) | 前者仅在没有 `prompt` 键时补默认文本；后者按模板改写已有 `prompt` | `prompt`：默认文本字符串（默认 `"Do task."`）或按模板生成的指令字符串 |
+| [InjectEmbodiment](/resVLA/data/transform/embodiment.py) | 写入具身名称字符串 | `embodiment`：字符串，例如 `"franka"` |
+| [Normalizer / StepwiseNormalizer](/resVLA/data/transform/action.py) | 根据统计量和有效维度归一化；后者使用逐时间步统计量 | `actions`：归一化后的 tensor，shape 不变；`states`：归一化后的 tensor，一维输入 `[S]` 会扩展为 `[1,S]`，其中 `S` 为当前状态维度 |
+| [PadStateAction](/resVLA/data/transform/action.py) | 补齐动作/状态的最后一维，生成 `action_mask`、`state_mask` | `actions [H,A]`、`action_mask [A]`；`states` 最后一维补齐到 `A`（如 `[1,A]`）、`state_mask [A]`；mask 为 bool，补齐位置为 False |
+| [PadActionToDict](/resVLA/data/transform/action.py) | 按 `dim_config` 提取部件动作并补齐，生成 `actions_dict`、`actions_mask`；原 `actions` 字段仍保留 | `actions_dict[part_name]`：tensor `[H,M]`；`actions_mask[part_name]`：bool tensor `[M]`，表示该部件的有效动作维度 |
+| [InjectActionTimestamp](/resVLA/data/transform/action.py) | 生成 `arange(action_horizon)/action_freq`；它不负责从数据集中读取动作帧 | `action_timestamps`：tensor `[H]`，值为 `[0, 1/f, ..., (H-1)/f]`，其中 `f=action_freq` |
+| [ResizeImage](/resVLA/data/transform/image.py) | 转为 RGB PIL 图像，保持比例缩放并居中补边到目标尺寸 | `images`：相机名到 RGB PIL 图像的字典，每张图的 `.size` 为配置的 `(width,height)` |
 
-~~~text
-Your task is: {instruction}. Please think and generate the next action chunk based on the current observations.
-~~~
+具体采用哪些变换由任务配置决定，并非每条数据都执行全部 transform。动作相关输出以输入包含非空 `actions` 为前提；缺少动作时，Normalizer 和 PadStateAction 仍处理状态，PadActionToDict 原样返回数据。
 
-prompt 仍是普通字符串，直到 BatchCollator 才会进入聊天模板。
+## Collate Function
 
-### 3. Embodiment 和时间戳
+DataLoader 的参数名是 `collate_fn`。图文编码实现是 [BatchCollator](/resVLA/data/batch_collator.py)，不是名为 `collator_fn` 的函数。
 
-InjectEmbodiment 写入字符串字段 embodiment=franka。这个字符串必须同时出现在模型配置的 embodiment_config 中，否则 EmbodimentEmbeddings 查表时会失败。
+### 图文任务：BatchCollator
 
-InjectActionTimestamp 增加 action_timestamps，值为：
+`BatchCollator.__call__` 接收多条 sample 组成的列表，主要执行：
 
-~~~text
-[0/20, 1/20, ..., 15/20]
-~~~
+1. 对每条 sample 的 `images`、`prompt` 调用 processor 的 `encode_input`；如果 processor 没有该方法，则通过默认图文消息模板调用 `apply_chat_template`。
+2. 对原始 samples 使用 `default_collate`，堆叠动作、状态和 mask 等字段；PIL 图像通过本文件注册的规则保留为列表。
+3. 对编码后的 `input_ids`、`attention_mask` 等序列字段进行 padding：单样本 `[1,Sᵢ]` 变为 `[B,S_max]`。padding 方向来自显式 `padding_side` 或 tokenizer 配置；ID 使用 pad token，attention mask 补 0。
+4. 对图像 patch、grid 等其他编码字段沿第 0 维 `cat`，将结果放入 `batch["vlm_inputs"]`。图像字段按 processor 的布局打包，不一定具有独立的 batch 维。
 
-该字段目前会随 batch 保留，但 ResVLA.forward 不直接使用它；它主要为下游数据处理或未来模型扩展保留。
+因此，若单条动作 shape 为 `[H,A]`，batch 中为 `[B,H,A]`；单条状态为 `[1,A]` 时，batch 中为 `[B,1,A]`。原始字段仍保留，`vlm_inputs` 是新增的保留字段，sample 不应预先提供它。
 
-### 4. 归一化
+### 纯动作任务：default_collate
 
-Normalizer 支持 min-max、quantile 和 mean-std 三种方式。LIBERO 使用 quantile，把统计量 q01 和 q99 映射到 [-1, 1]：
-
-~~~text
-x_normalized = 2 * (x - q01) / (q99 - q01 + 1e-8) - 1
-~~~
-
-统计量来自：
-
-- [action_stats.json](../norm_stats/resvla_libero/libero/action_stats.json)
-- [state_stats.json](../norm_stats/resvla_libero/libero/state_stats.json)
-
-统计文件的 mask 决定哪些维度参与归一化。当前实现不会自动 clip 超出 q01/q99 的值。
-
-### 5. Padding 和 mask
-
-PadStateAction 将动作和状态的最后一维补到 action_dim=32，补零并生成 mask：
-
-~~~text
-actions      [16, action_dim_raw] → [16, 32]
-states       [1, state_dim_raw]   → [1, 32]
-action_mask  [32]                 # 原始动作维度为 True
-state_mask   [32]                 # 原始状态维度为 True
-~~~
-
-mask 会进入 batch，但当前 ResVLA.forward 只读取 actions 和 states，尚未用 mask 对损失进行逐维屏蔽。若新增 embodiment 的有效维度不同，应同时确认模型损失是否需要改为 mask-aware。
-
-### 6. 图像
-
-ResizeImage 将 tensor 或 NumPy 数组转换为 RGB PIL.Image，保持纵横比缩放后居中 padding 到 224×224。LIBERO 的两路相机顺序来自 images 字典的插入顺序，当前为 cam_high、cam_wrist。
-
-## BatchCollator 的输出
-
-[BatchCollator](../resVLA/data/batch_collator.py) 对每个样本执行 ResVLAProcessor.encode_input：
-
-1. 按 images.values() 的顺序加入图像；
-2. 追加 prompt 文本；
-3. 以一个 user message 调用 Qwen3VLProcessor.apply_chat_template；
-4. 对 input_ids、attention_mask 等序列字段做 padding；
-5. 对视觉 patch/grid 字段按 batch 维拼接；
-6. 对其余字段使用 PyTorch default_collate。
-
-传给模型的 batch 形状可以理解为：
-
-~~~text
-{
-  "actions":       Tensor[B, 16, 32],
-  "states":        Tensor[B, 1, 32],
-  "action_mask":   Tensor[B, 32],
-  "state_mask":    Tensor[B, 32],
-  "embodiment":    List[str]              # 长度 B
-  "action_timestamps": Tensor[B, 16],
-  "vlm_inputs": {
-      "input_ids": ...,
-      "attention_mask": ...,
-      # 以及 Qwen 视觉输入字段，如 pixel_values、image_grid_thw
-  }
-}
-~~~
-
-sample 中不能预先包含 vlm_inputs；这是 BatchCollator 保留的字段名。图像不会直接 stack 成 tensor，而是先保留为 PIL 图像列表，交给 processor 处理。
-
-## 计算统计量
-
-[resVLA/scripts/compute_norm.py](../resVLA/scripts/compute_norm.py) 会读取 task 配置，在第一个 Normalizer 之前执行 transform，然后单独为每个 TransformDataset 统计 action/state。典型命令：
-
-~~~bash
-python3 resVLA/scripts/compute_norm.py \
-  --task resvla_libero \
-  --batch-size 128 \
-  --num-workers 8
-~~~
-
-脚本会按照 Normalizer 中配置的路径写回 norm_stats/<task>/<dataset>/。MixtureDataset 的权重不会参与统计；一个 TransformDataset 中列出的所有 repo 会共同贡献统计量。
-
-如果数据字段、action horizon、delta/absolute action 变换或数据版本发生变化，应先重新计算统计量，再启动训练。训练配置中的相对路径以仓库根目录为基准。
-
-## 添加新数据集
-
-建议按以下顺序接入：
-
-1. 在 configs/dataset/transform_datasets/ 新增 YAML，明确 repo_ids、lerobot_version、action_horizon、action_only 和 video_backend。
-2. 用 RepackTransform 将源字段映射为 actions、states、images、prompt。
-3. 注入与模型配置一致的 embodiment 字符串。
-4. 选择 Normalizer，并为该 TransformDataset 生成独立的 action/state 统计文件。
-5. 根据原始动作维度设置 action_dim；如果不同数据集需要不同维度，应考虑拆分模型配置或在 transform 中统一 padding。
-6. 用一个小 batch 检查 actions、states、images、prompt、embodiment 的类型和形状，再运行完整训练。
-
-如果使用 v3 数据集，确保 lerobot_version 写为 v3.0；TransformDataset 当前只接受 v2.1 和 v3.0 两种值。
+并非所有任务都需要图文 processor。例如 [tokenflow_stage1_v3.yaml](/configs/task/tokenflow_stage1_v3.yaml) 显式将 `collate_fn` 替换为 PyTorch `default_collate`，直接递归堆叠动作字典与 mask，不生成 `vlm_inputs`。选择哪个 collator 应以具体任务配置为准。

@@ -13,7 +13,7 @@ class TransformDataset(Dataset):
         self,
         repo_ids: List[str],
         *,
-        lerobot_version: Literal["v2", "v3"],
+        lerobot_version: Literal["v2.1", "v3.0"],
         action_horizon: float,
         action_only: bool,
         video_backend: Literal["pyav", "torchcodec"],
