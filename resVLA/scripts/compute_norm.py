@@ -11,7 +11,7 @@ chain are applied before statistics are collected.  This is important for
 transforms such as ``ToDeltaAction`` and ``ToAbsoluteAction``.
 
 Example:
-    python3 scripts/compute_norm.py --task resvla_libero --batch-size 128 --num-workers 8
+    python -m resVLA.scripts.compute_norm --task resvla_libero --batch-size 128 --num-workers 8
 
 The configured normalizer paths identify the transform dataset name.  Output
 is written below ``norm_stats/<task>/<dataset>/``.  Each output file contains

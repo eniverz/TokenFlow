@@ -98,6 +98,24 @@ class MappedWeightLoader(BaseWeightLoader):
         return model
 
 
+class TorchCheckpointWeightLoader(BaseWeightLoader):
+    """Load a PyTorch state dict into one submodule, stripping its source prefix."""
+
+    def __init__(self, path: str, module: str, state_dict_key: str | None = None, prefix: str = ""):
+        self.path = path
+        self.module = module
+        self.state_dict_key = state_dict_key
+        self.prefix = prefix
+
+    def load(self, model: torch.nn.Module) -> torch.nn.Module:
+        state_dict = torch.load(self.path, map_location="cpu", weights_only=True)
+        if self.state_dict_key is not None:
+            state_dict = state_dict[self.state_dict_key]
+        state_dict = {key.removeprefix(self.prefix): value for key, value in state_dict.items()}
+        model.get_submodule(self.module).load_state_dict(state_dict)
+        return model
+
+
 class CompositeWeightLoader(BaseWeightLoader):
     """Apply several loaders in declaration order."""
 

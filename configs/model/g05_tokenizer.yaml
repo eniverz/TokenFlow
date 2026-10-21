@@ -1,0 +1,30 @@
+_target_: resVLA.models.tokenizer.g05_tokenizer.configuration_g05_tokenizer.G05TokenizerConfig
+_convert_: all
+
+model_type: g05_tokenizer
+dtype: float32
+embodiment_config: ${oc.create:${oc.collate:${dataset}}}
+part_config: [left_arm, right_arm, left_gripper, right_gripper, torso]
+action_horizon: ${action_horizon}
+max_part_dim: 9
+
+encoder_channels: 256
+latent_dim: 128
+num_heads: 8
+dim_heads: 64
+horizon_patch_size: 8
+conv_in_action_kernel: 2
+c_mults: [1, 2, 2]
+strides: [[1, 1], [2, 1], [2, 1]]
+transformer_depths: [2, 2, 2]
+use_block_dct: true
+block_dct_block_size: 8
+
+n_codebooks: 4
+num_quantizers: 2
+codebook_size: 4096
+codebook_dim: 8
+use_rotation_trick: false
+rule_based_key_patterns: [gripper]
+rule_based_min_block_len: 1
+rule_based_binarize_threshold: 0.0

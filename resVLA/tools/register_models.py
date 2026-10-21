@@ -28,6 +28,12 @@ def register_tokenflow_stage1():
     AutoConfig.register("vq_actioncodec_v3", ActionCodecV3Config)
     AutoModel.register(ActionCodecV3Config, ActionCodecV3)
 
+    # g05_tokenizer
+    from ..models.tokenizer.g05_tokenizer import G05Tokenizer, G05TokenizerConfig
+
+    AutoConfig.register("g05_tokenizer", G05TokenizerConfig)
+    AutoModel.register(G05TokenizerConfig, G05Tokenizer)
+
 
 def register_tokenflow_stage2():
     # v1
