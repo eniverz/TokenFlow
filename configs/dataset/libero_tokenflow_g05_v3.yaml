@@ -1,0 +1,37 @@
+_target_: resVLA.data.transform_dataset.TransformDataset
+repo_ids:
+  - ${dataset_root}/libero_10_no_noops_1.0.0_lerobot
+  - ${dataset_root}/libero_goal_no_noops_1.0.0_lerobot
+  - ${dataset_root}/libero_object_no_noops_1.0.0_lerobot
+  - ${dataset_root}/libero_spatial_no_noops_1.0.0_lerobot
+lerobot_version: v2.1
+action_horizon: ${action_horizon}
+action_only: false
+video_backend: torchcodec
+transform:
+  - _target_: resVLA.data.transform.process.RepackTransform
+    repack:
+      actions: action
+      states: observation.state
+      images:
+        cam_high: observation.images.image
+        cam_wrist: observation.images.wrist_image
+      prompt: task
+  - _target_: resVLA.data.transform.embodiment.InjectEmbodiment
+    embodiment: franka
+  - _target_: ${normalizer_target}
+    action_norm_stats:
+      _target_: resVLA.data.transform.action.NormStats
+      path: ${norm_stats_dir}/action_stats.json
+      stepwise: ${action_norm_stepwise}
+      mask: [true, true, true, true, true, true, true]
+    state_norm_stats:
+      _target_: resVLA.data.transform.action.NormStats
+      path: ${norm_stats_dir}/state_stats.json
+      stepwise: ${state_norm_stepwise}
+      mask: [true, true, true, true, true, true, true, true]
+    norm_type: quantile
+  - _target_: resVLA.data.transform.action.PadStateAction
+    action_dim: ${action_dim}
+  - _target_: resVLA.data.transform.image.ResizeImage
+    size: [224, 224]

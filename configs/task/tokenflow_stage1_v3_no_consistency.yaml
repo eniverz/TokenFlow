@@ -1,0 +1,67 @@
+# @package _global_
+
+defaults:
+  - /train: trainer
+  - /model: tokenflow_tokenizer_v3
+  - /train/accelerator: zero2
+  - _self_
+
+task_name: tokenflow_stage1_v3_with_no_consistency
+action_horizon: 16
+pre_device_batch_size: 2048
+gradient_accumulation_steps: 1
+num_workers: 64
+num_train_steps: 100000
+log_interval: 100
+save_interval: 10000
+
+model:
+  consistency_loss_weight: 0.0
+
+# Same LIBERO actions and global normalization as resvla_libero.
+dataset_root: /2022533089/datasets/StarVLA_datasets/libero
+norm_stats_dir: norm_stats/tokenflow/libero
+dataset:
+  _target_: resVLA.data.mixture_dataset.MixtureDataset
+  weights:
+    - 1.0
+  datasets:
+    - ${oc.create:${oc.load:configs/dataset/libero_tokenflow.yaml}}
+
+# Stage 1 trains from scratch and collates action tensors directly.
+weight_loader:
+  _target_: resVLA.training.weight_loader.CompositeWeightLoader
+  loaders: []
+
+collate_fn:
+  _target_: torch.utils.data.default_collate
+  _partial_: true
+
+train:
+  dataloader:
+    collate_fn: ${collate_fn}
+  accelerator:
+    # Keep projections and EMA buffers in fp32; use the existing ZeRO-2 setup.
+    mixed_precision: "no"
+    log_with: wandb
+
+optimizer:
+  _target_: resVLA.optim.GroupedAdamW
+  lr: 1.0e-4
+  weight_decay: 0.01
+  betas: [0.9, 0.999]
+  eps: 1.0e-8
+
+scheduler:
+  _target_: resVLA.optim.WarmupConstantCosineLR
+  num_training_steps: ${num_train_steps}
+  num_warmup_steps: 1000
+  constant_end_ratio: 0.25
+  lr_min_ratio: 0.1
+  num_cycles: 0.5
+
+wandb:
+  project: resvla
+  name: ${task_name}_${now:%m%d}
+  group: ${task_name}
+  dir: ${hydra:run.dir}/wandb

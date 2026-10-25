@@ -170,11 +170,6 @@ class Trainer:
             if self.processor is not None:
                 self.processor.save_pretrained(checkpoint_path)
                 logger.info(f"Processor saved at {checkpoint_path}")
-            else:
-                logger.warning(
-                    "Checkpoint has no processor: the DataLoader collate_fn does not "
-                    "expose a processor."
-                )
 
             torch.save(
                 {

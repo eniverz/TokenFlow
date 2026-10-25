@@ -198,7 +198,7 @@ mask：复制 [V,M]       → [U,M]
 U = 2V
 ```
 
-原始实例 `v` 与配对实例 `V+v` 对齐。一致性损失依赖这一顺序。即使尚未启用增强或处于 eval，`forward` 仍复制成 `U=2V`，此时两份动作内容相同；并不跳过第二份编码或 commitment 计算。将 `consistency_loss_weight` 设为 0 只关闭其对总 loss 的贡献，不会关闭训练中的增强调度。
+仅在 `consistency_loss_weight > 0` 时执行上述分支。原始实例 `v` 与配对实例 `V+v` 对齐，一致性损失依赖这一顺序。此分支中，即使尚未启用增强或处于 eval，`forward` 仍复制成 `U=2V`，此时两份动作内容相同。权重不大于 0 时，跳过增强、双份编码、逐级 consistency 中间值和一致性损失及指标计算；encoder 和 RVQ 只处理 `V` 条原始实例，commitment loss 和 EMA 更新也只使用这些实例。连续和量化重建分支保持不变。
 
 ### 3. 编码具身与部件条件
 

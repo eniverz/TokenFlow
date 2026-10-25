@@ -154,9 +154,7 @@ class ActionCodec(PreTrainedModel):
 
         all_embodiment_embs = self.embodiment_embeddings(embodiment_names)
 
-        augmented_actions, layer_weights = self.consistency(actions_dict)
-
-        parts, masks, embodiment_embs, part_embs, augmented_parts = {}, [], [], [], []
+        parts, masks, embodiment_embs, part_embs = {}, [], [], []
 
         for part_name, part_actions in actions_dict.items():
             part_mask = actions_mask[part_name]
@@ -168,24 +166,32 @@ class ActionCodec(PreTrainedModel):
             masks.append(part_mask[present])
             embodiment_embs.append(all_embodiment_embs[present])
             part_embs.append(self.part_embeddings(part_name).expand(parts[part_name].shape[0], -1))
-            augmented_parts.append(augmented_actions[part_name][present])
 
         valid_parts = torch.cat(list(parts.values()), dim=0)
         valid_mask = torch.cat(masks, dim=0)
         embodiment_embs = torch.cat(embodiment_embs, dim=0)
         part_embs = torch.cat(part_embs, dim=0)
-        augmented_parts = torch.cat(augmented_parts, dim=0)
 
-        batch_size = valid_parts.shape[0]
-        latents = self._part_encoder(
-            torch.cat([part_embs, part_embs]),
-            torch.cat([valid_parts, augmented_parts]),
-            torch.cat([valid_mask, valid_mask]),
-            torch.cat([embodiment_embs, embodiment_embs]),
-        )
-        quantized, _, metrics, residuals, codes = self._quantize(latents, return_level_data=True)
-        metrics.update(compute_consistency_loss(residuals, codes, batch_size, layer_weights))
-        latents, quantized = latents[:batch_size], quantized[:batch_size]
+        if self.config.consistency_loss_weight > 0:
+            augmented_actions, layer_weights = self.consistency(actions_dict)
+            augmented_parts = torch.cat([
+                augmented_actions[name][actions_mask[name].any(dim=-1)] for name in parts
+            ], dim=0)
+            batch_size = valid_parts.shape[0]
+            latents = self._part_encoder(
+                torch.cat([part_embs, part_embs]),
+                torch.cat([valid_parts, augmented_parts]),
+                torch.cat([valid_mask, valid_mask]),
+                torch.cat([embodiment_embs, embodiment_embs]),
+            )
+            quantized, _, metrics, residuals, codes = self._quantize(latents, return_level_data=True)
+            metrics.update(compute_consistency_loss(residuals, codes, batch_size, layer_weights))
+            consistency_loss = self.config.consistency_loss_weight * metrics["loss/consistency_loss"]
+            latents, quantized = latents[:batch_size], quantized[:batch_size]
+        else:
+            latents = self._part_encoder(part_embs, valid_parts, valid_mask, embodiment_embs)
+            quantized, _, metrics = self._quantize(latents)
+            consistency_loss = 0
         quantized_actions = self._part_decoder(part_embs, quantized, valid_mask, embodiment_embs)
 
         # For stage3 flow matching, the decoder needs to be able to handle continuous latents
@@ -213,7 +219,7 @@ class ActionCodec(PreTrainedModel):
         metrics["loss"] = (
             self.config.quantized_recons_loss_weight * metrics["loss/quantized_recons_loss"]
             + self.config.continuous_recons_loss_weight * metrics["loss/continuous_recons_loss"]
-            + self.config.consistency_loss_weight * metrics["loss/consistency_loss"]
+            + consistency_loss
             + self.config.commit_loss_weight * metrics["loss/commit_loss"]
         )
         return metrics

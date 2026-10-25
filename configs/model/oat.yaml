@@ -1,0 +1,23 @@
+_target_: resVLA.models.tokenizer.oat.configuration_oat.OATConfig
+_convert_: all
+
+model_type: oat
+dtype: float32
+embodiment_config: ${oc.create:${oc.collate:${dataset}}}
+action_dim: 32
+action_horizon: ${action_horizon}
+hidden_size: 256
+num_heads: 8
+num_kv_heads: 8
+attention_bias: false
+encoder_depth: 6
+decoder_depth: 6
+dropout: 0.1
+norm_eps: 1.0e-6
+attn_implementation: flash_attention_2
+num_tokens: 16
+quantizer_levels: [8, 8, 6, 5]
+
+quantized_recons_loss_weight: 1.5
+continuous_recons_loss_weight: 1.0
+continuous_noise_std: 0.03

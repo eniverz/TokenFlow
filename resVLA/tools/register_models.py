@@ -28,6 +28,24 @@ def register_tokenflow_stage1():
     AutoConfig.register("vq_actioncodec_v3", ActionCodecV3Config)
     AutoModel.register(ActionCodecV3Config, ActionCodecV3)
 
+    # v4
+    from ..models.tokenizer.vq_actioncodec_v4 import ActionCodec as ActionCodecV4, ActionCodecConfig as ActionCodecV4Config
+
+    AutoConfig.register("vq_actioncodec_v4", ActionCodecV4Config)
+    AutoModel.register(ActionCodecV4Config, ActionCodecV4)
+
+    # oat
+    from ..models.tokenizer.oat import OAT, OATConfig
+
+    AutoConfig.register("oat", OATConfig)
+    AutoModel.register(OATConfig, OAT)
+
+    # oat_v2
+    from ..models.tokenizer.oat_v2 import OAT as OATV2, OATConfig as OATV2Config
+
+    AutoConfig.register("oat_v2", OATV2Config)
+    AutoModel.register(OATV2Config, OATV2)
+
     # g05_tokenizer
     from ..models.tokenizer.g05_tokenizer import G05Tokenizer, G05TokenizerConfig
 
@@ -49,6 +67,13 @@ def register_tokenflow_stage2():
     AutoConfig.register("tokenflow_ar_v2", TokenFlowARV2Config)
     AutoModel.register(TokenFlowARV2Config, TokenFlowARV2)
     AutoProcessor.register(TokenFlowARV2Config, TokenFlowARV2Processor)
+
+    # v3
+    from ..models.tokenflow_stage2.v3 import TokenFlowARConfig as TokenFlowARV3Config, TokenFlowAR as TokenFlowARV3, TokenFlowARProcessor as TokenFlowARV3Processor
+
+    AutoConfig.register("tokenflow_ar_v3", TokenFlowARV3Config)
+    AutoModel.register(TokenFlowARV3Config, TokenFlowARV3)
+    AutoProcessor.register(TokenFlowARV3Config, TokenFlowARV3Processor)
 
 
 def register_all_models():

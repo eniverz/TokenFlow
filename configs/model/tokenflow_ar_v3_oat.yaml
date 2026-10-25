@@ -1,0 +1,12 @@
+defaults:
+  - vlm_config: qwen35_2b
+  - /model@action_tokenizer_config: oat_v2
+  - _self_
+
+_target_: resVLA.models.tokenflow_stage2.v3.configuration_tokenflow_ar.TokenFlowARConfig
+_convert_: all
+
+model_type: tokenflow_ar_v3
+dtype: bfloat16
+attn_implementation: flash_attention_2
+action_dim: ${action_dim}

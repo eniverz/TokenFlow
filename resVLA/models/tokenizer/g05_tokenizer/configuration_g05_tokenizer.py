@@ -10,6 +10,8 @@ class G05TokenizerConfig(PretrainedConfig):
 
     embodiment_config: List[str] = field(default_factory=lambda: ["franka"])
     part_config: List[str] = field(default_factory=lambda: ["left_arm", "right_arm", "left_gripper", "right_gripper", "torso"])
+    action_dim: int = 32
+    part_dims: dict[str, dict[str, list[int]]] = field(default_factory=dict)
     action_horizon: int = 32
     max_part_dim: int = 9
     rule_based_key_patterns: List[str] = field(default_factory=lambda: ["gripper"])
@@ -92,3 +94,13 @@ class G05TokenizerConfig(PretrainedConfig):
     @property
     def vocab_size_with_specials(self):
         return math.prod(self.fsq_levels) if self.use_fsq else self.codebook_size
+
+    @property
+    def vocabulary(self):
+        tokens = [f"<action_{i:04d}>" for i in range(self.codebook_size)]
+        for part in self.part_config:
+            if any(pattern in part for pattern in self.rule_based_key_patterns):
+                tokens.append(f"<{part}>")
+            else:
+                tokens.extend(f"<{part}_{level}>" for level in range(self.num_quantizers))
+        return tokens + ["<action_start>", "<action_end>"]
