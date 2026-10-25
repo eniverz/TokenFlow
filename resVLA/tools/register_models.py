@@ -75,6 +75,13 @@ def register_tokenflow_stage2():
     AutoModel.register(TokenFlowARV3Config, TokenFlowARV3)
     AutoProcessor.register(TokenFlowARV3Config, TokenFlowARV3Processor)
 
+    # parallel decoding
+    from ..models.tokenflow_stage2.pd_v1 import TokenFlowPDConfig, TokenFlowPD, TokenFlowPDProcessor
+
+    AutoConfig.register("tokenflow_pd_v1", TokenFlowPDConfig)
+    AutoModel.register(TokenFlowPDConfig, TokenFlowPD)
+    AutoProcessor.register(TokenFlowPDConfig, TokenFlowPDProcessor)
+
 
 def register_tokenflow_stage3():
     from ..models.tokenflow_stage3.v1 import TokenFlowConfig, TokenFlow, TokenFlowProcessor
