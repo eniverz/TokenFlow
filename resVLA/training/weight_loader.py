@@ -129,11 +129,12 @@ class CompositeWeightLoader(BaseWeightLoader):
 
 
 class VocabResize(BaseWeightLoader):
-    """Resize a backbone to the vocabulary size stored in the parent config."""
+    """Resize a backbone to the vocabulary size stored in its parent model config."""
 
     def __init__(self, module: str) -> None:
         self.module = module
 
     def load(self, model: torch.nn.Module) -> torch.nn.Module:
-        model.get_submodule(self.module).resize_token_embeddings(model.config.vocab_size)
+        parent = model.get_submodule(self.module.rpartition(".")[0])
+        model.get_submodule(self.module).resize_token_embeddings(parent.config.vocab_size)
         return model

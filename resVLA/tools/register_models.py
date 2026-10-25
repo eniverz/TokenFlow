@@ -76,6 +76,13 @@ def register_tokenflow_stage2():
     AutoProcessor.register(TokenFlowARV3Config, TokenFlowARV3Processor)
 
 
+def register_tokenflow_stage3():
+    from ..models.tokenflow_stage3.v1 import TokenFlowConfig, TokenFlow, TokenFlowProcessor
+
+    AutoConfig.register("tokenflow_stage3", TokenFlowConfig)
+    AutoModel.register(TokenFlowConfig, TokenFlow)
+    AutoProcessor.register(TokenFlowConfig, TokenFlowProcessor)
+
 def register_all_models():
     """
     Register all models into the AutoModel, AutoConfig, and AutoProcessor classes.
@@ -85,3 +92,4 @@ def register_all_models():
     register_resvla()
     register_tokenflow_stage1()
     register_tokenflow_stage2()
+    register_tokenflow_stage3()

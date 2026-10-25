@@ -1,0 +1,20 @@
+defaults:
+  - /model@stage2_config: tokenflow_ar_v3
+  - _self_
+
+_target_: resVLA.models.tokenflow_stage3.v1.configuration_tokenflow.TokenFlowConfig
+_convert_: all
+
+model_type: tokenflow_stage3
+dtype: bfloat16
+attn_implementation: flash_attention_2
+action_dim: ${action_dim}
+action_dims: ${action_dims}
+refiner_hidden_size: 512
+refiner_num_heads: 8
+refiner_num_kv_heads: 8
+attention_bias: false
+rope_base: 10000
+num_refiner_layers: 4
+num_inference_steps: 4
+fm_noise_std: 0.1

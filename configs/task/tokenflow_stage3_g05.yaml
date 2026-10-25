@@ -1,0 +1,79 @@
+# @package _global_
+
+defaults:
+  - /train: trainer
+  - /model: tokenflow
+  - /train/accelerator: zero2
+  - override /model@model.stage2_config: tokenflow_ar_v3_g05
+  - override /model/vlm_config@model.stage2_config.vlm_config: qwen3_vl_2b
+  - _self_
+
+task_name: tokenflow_stage3_g05
+stage2_model_path: /2022533089/projects/resVLA/results/tokenflow_stage2_v3_g05_1025/checkpoint/step_10
+action_horizon: 32
+action_dim: 32
+action_dims:
+  franka: [0, 1, 2, 3, 4, 5, 6]
+
+dataset_root: /2022533089/datasets/StarVLA_datasets/libero
+norm_stats_dir: norm_stats/tokenflow_stage2_v2_g05/libero
+normalizer_target: resVLA.data.transform.action.StepwiseNormalizer
+action_norm_stepwise: true
+state_norm_stepwise: false
+dataset:
+  _target_: resVLA.data.mixture_dataset.MixtureDataset
+  weights: [1.0]
+  datasets:
+    - ${oc.create:${oc.load:configs/dataset/libero_tokenflow_g05_v3.yaml}}
+
+processor:
+  _target_: resVLA.models.tokenflow_stage3.v1.processing_tokenflow.TokenFlowProcessor.from_pretrained
+  pretrained_model_name_or_path: ${stage2_model_path}
+
+weight_loader:
+  _target_: resVLA.training.weight_loader.CompositeWeightLoader
+  loaders:
+    - _target_: resVLA.training.weight_loader.VocabResize
+      module: "stage2.vlm"
+    - _target_: resVLA.training.weight_loader.MappedWeightLoader
+      path: ${stage2_model_path}
+      prefix_map:
+        "": "stage2."
+
+optimizer:
+  _target_: resVLA.optim.GroupedAdamW
+  lr: 1.0e-4
+  weight_decay: 0.01
+  betas: [0.9, 0.999]
+  eps: 1.0e-8
+
+scheduler:
+  _target_: resVLA.optim.WarmupConstantCosineLR
+  num_training_steps: ${num_train_steps}
+  num_warmup_steps: 5000
+  constant_end_ratio: 0.25
+  lr_min_ratio: 0.1
+  num_cycles: 0.5
+
+train:
+  accelerator:
+    mixed_precision: "no"
+    log_with: wandb
+    deepspeed_plugin:
+      hf_ds_config:
+        torch_autocast:
+          enabled: true
+          dtype: bfloat16
+
+pre_device_batch_size: 16
+gradient_accumulation_steps: 1
+num_workers: 16
+num_train_steps: 100000
+log_interval: 100
+save_interval: 10000
+
+wandb:
+  project: resVLA
+  name: ${task_name}_${now:%m%d}
+  group: ${task_name}
+  dir: ${hydra:run.dir}/wandb

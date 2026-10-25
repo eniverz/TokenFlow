@@ -49,4 +49,10 @@ rule_based_binarize_threshold: 0.5
 
 
 action_dim: ${action_dim}
-part_dims: ${part_dims}
+part_dims:
+  franka:
+    left_arm: []
+    right_arm: [0, 1, 2, 3, 4, 5]
+    left_gripper: []
+    right_gripper: [6]
+    torso: []

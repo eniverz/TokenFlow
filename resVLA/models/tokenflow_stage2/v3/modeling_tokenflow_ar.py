@@ -112,9 +112,9 @@ class TokenFlowAR(PreTrainedModel):
         accuracy = (correct * action_mask).sum() / action_mask.sum()
         return {"loss": loss, "action_token": accuracy.detach()}
 
-    @torch.inference_mode()
-    def predict_action(self, samples):
-        """Generate and decode normalized actions without ground-truth action fields."""
+    @torch.no_grad()
+    def predict_action(self, samples, num_context_layers=0):
+        """Return actions, optionally with the last N prefill layer outputs and their mask."""
         device = samples["states"].device
         embodiments = samples["embodiment"]
         batch_size = len(embodiments)
@@ -126,7 +126,13 @@ class TokenFlowAR(PreTrainedModel):
         lengths = torch.tensor(sequence_lengths, device=device)
         max_length = int(lengths.max())
         generated = torch.full((batch_size, max_length), self.config.pad_token_id, device=device, dtype=torch.long)
-        outputs = self.vlm(**inputs, logits_to_keep=1, use_cache=True, return_dict=True)
+        outputs = self.vlm(
+            **inputs, logits_to_keep=1, use_cache=True,
+            output_hidden_states=num_context_layers > 0, return_dict=True,
+        )
+        if num_context_layers:
+            contexts = outputs.hidden_states[1:][-num_context_layers:]
+            context_mask = attention_mask.bool()
 
         for step in range(max_length):
             for i, embodiment in enumerate(embodiments):
@@ -150,6 +156,7 @@ class TokenFlowAR(PreTrainedModel):
                     past_key_values=outputs.past_key_values,
                     logits_to_keep=1,
                     use_cache=True,
+                    output_hidden_states=False,
                     return_dict=True,
                 )
 
@@ -160,4 +167,7 @@ class TokenFlowAR(PreTrainedModel):
         with torch.autocast(device_type=device.type, enabled=False):
             codes = self.action_tokenizer.deserialize(sequences, embodiments)
             latents = self.action_tokenizer.dequantize(codes)
-            return self.action_tokenizer.decode(latents, embodiments)
+            actions = self.action_tokenizer.decode(latents, embodiments)
+        if num_context_layers:
+            return actions, contexts, context_mask
+        return actions

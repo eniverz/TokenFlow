@@ -34,6 +34,10 @@ class TokenFlowARConfig(PretrainedConfig):
         super().__post_init__(**kwargs)
 
     @property
+    def hidden_size(self):
+        return self.vlm_config.text_config.hidden_size
+
+    @property
     def action_tokens(self):
         cfg = self.action_tokenizer_config
         tokens = list(cfg.vocabulary)

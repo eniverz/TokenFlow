@@ -6,7 +6,13 @@ dtype: float32
 embodiment_config: ${oc.create:${oc.collate:${dataset}}}
 part_config: [left_arm, right_arm, left_gripper, right_gripper, torso]
 action_dim: ${action_dim}
-part_dims: ${part_dims}
+part_dims:
+  franka:
+    left_arm: []
+    right_arm: [0, 1, 2, 3, 4, 5]
+    left_gripper: []
+    right_gripper: [6]
+    torso: []
 action_horizon: ${action_horizon}
 max_part_dim: 9
 

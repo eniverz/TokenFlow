@@ -31,7 +31,7 @@ transform:
     norm_type: quantile
   - _target_: resVLA.data.transform.action.PadActionToDict
     max_part_dim: 6
-    dim_config: ${part_dims.franka}
+    dim_config: ${model.part_dims.franka}
   - _target_: resVLA.data.transform.action.PadStateAction
     action_dim: ${action_dim}
   - _target_: resVLA.data.transform.image.ResizeImage

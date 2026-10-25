@@ -12,13 +12,6 @@ pretrained_model_path: /2022533089/projects/ckpt/Qwen3-VL-2B-Instruct
 action_tokenizer_path: /2022533089/projects/resVLA/results/tokenflow_stage1_v3_1012/checkpoint/step_100000
 action_horizon: 16
 action_dim: 32
-part_dims:
-  franka:
-    left_arm: []
-    right_arm: [0, 1, 2, 3, 4, 5]
-    left_gripper: []
-    right_gripper: [6]
-    torso: []
 
 dataset_root: /2022533089/datasets/StarVLA_datasets/libero
 norm_stats_dir: norm_stats/tokenflow/libero

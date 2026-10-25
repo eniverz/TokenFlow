@@ -9,13 +9,6 @@ defaults:
 task_name: tokenflow_stage1_v4_with_no_consistency
 action_horizon: 16
 action_dim: 32
-part_dims:
-  franka:
-    left_arm: []
-    right_arm: [0, 1, 2, 3, 4, 5]
-    left_gripper: []
-    right_gripper: [6]
-    torso: []
 
 pre_device_batch_size: 2048
 gradient_accumulation_steps: 1

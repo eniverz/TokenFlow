@@ -10,4 +10,4 @@ model_type: tokenflow_ar_v2
 dtype: bfloat16
 attn_implementation: flash_attention_2
 action_dim: ${action_dim}
-part_dims: ${part_dims}
+part_dims: ${.action_tokenizer_config.part_dims}
