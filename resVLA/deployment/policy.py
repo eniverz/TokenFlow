@@ -127,16 +127,17 @@ class CheckpointPolicy:
         self.inverse_plans_by_embodiment: dict[str, list[dict[str, Any]]] = {}
         self.metadata_by_embodiment: dict[str, dict[str, Any]] = {}
         self.action_dim = int(self.model.config.action_dim)
+        # TokenFlow owns these fields in its codec; Stage 3 wraps Stage 2.
+        # ResVLA owns them directly in its model config.
+        action_model = getattr(self.model, "stage2", self.model)
+        action_config = getattr(action_model, "action_tokenizer", action_model).config
         action_horizon = getattr(self.model.config, "action_horizon", None)
         if action_horizon is None:
-            codec_config = getattr(getattr(self.model, "action_tokenizer", None), "config", None)
-            action_horizon = getattr(codec_config, "action_horizon", None)
+            action_horizon = action_config.action_horizon
         if action_horizon is None:
             raise ValueError("Neither model nor action tokenizer config defines action_horizon.")
         self.action_horizon = int(action_horizon)
-        configured_embodiments = getattr(self.model.config, "embodiment_config", None)
-        if configured_embodiments is None:
-            configured_embodiments = getattr(self.model.config, "part_dims", {})
+        configured_embodiments = action_config.embodiment_config
         task_cfg = _plain(cfg)
         if not isinstance(task_cfg, Mapping):
             raise TypeError("Resolved Hydra cfg must be a mapping.")
